@@ -1,0 +1,5 @@
+{
+  "name": "Instagram Profile Post Date Checker",
+  "description": "A web application to check the latest post date of Instagram profiles from a list of usernames. This app simulates API calls and provides functionality to start, stop, resume, and export results.",
+  "requestFramePermissions": []
+}
