@@ -178,10 +178,35 @@ export default function App() {
     const [statusMessage, setStatusMessage] = useState<string>('Select a file to begin.');
     const [timeRemaining, setTimeRemaining] = useState<string>('');
 
-    const isCheckingRef = useRef(isChecking);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isCheckingRef = useRef(isChecking);
+    
+    // Create a ref to hold all state and props needed by the processing loop.
+    // This avoids stale closures in the recursive setTimeout.
+    const stateRef = useRef({
+        currentIndex,
+        usernames,
+        results,
+        minDelay,
+        maxDelay,
+        resumeSession,
+        fileName
+    });
 
-    useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
+    // Keep the ref updated on every render
+    useEffect(() => {
+        stateRef.current = {
+            currentIndex,
+            usernames,
+            results,
+            minDelay,
+            maxDelay,
+            resumeSession,
+            fileName
+        };
+        isCheckingRef.current = isChecking;
+    });
+
 
     useEffect(() => {
         try {
@@ -196,7 +221,11 @@ export default function App() {
         }
     }, [resumeSession]);
 
+    // This is the core processing logic, wrapped in a stable useCallback.
+    // It reads all dynamic data from stateRef.current to avoid stale state.
     const processQueue = useCallback(async () => {
+        const { currentIndex, usernames, minDelay, maxDelay, resumeSession, fileName } = stateRef.current;
+
         if (!isCheckingRef.current || currentIndex >= usernames.length) {
             setIsChecking(false);
             setStatusMessage(`Finished checking ${usernames.length} profiles.`);
@@ -215,7 +244,6 @@ export default function App() {
         if (resultApi.error) {
             newResult.post_date = `Error: ${resultApi.error}`;
             newResult.error = true;
-            // Set a more specific status message to be displayed during the delay
             if (resultApi.code === 429) {
                 setStatusMessage(`Rate limited. Pausing for ${delay / 1000}s...`);
             } else if (resultApi.code === 404) {
@@ -242,28 +270,32 @@ export default function App() {
             }
         }
 
+        // Use functional updates to ensure state updates correctly
         setResults(prev => [...prev, newResult]);
         const nextIndex = currentIndex + 1;
         setCurrentIndex(nextIndex);
 
         if (resumeSession) {
-            const sessionData: StoredSession = { usernames, results: [...results, newResult], currentIndex: nextIndex, minDelay, maxDelay, fileName };
+            const updatedResults = [...stateRef.current.results, newResult];
+            const sessionData: StoredSession = { usernames, results: updatedResults, currentIndex: nextIndex, minDelay, maxDelay, fileName };
             localStorage.setItem('instagramCheckerSession', JSON.stringify(sessionData));
         }
 
         setTimeout(processQueue, delay);
-    }, [currentIndex, usernames, maxDelay, minDelay, resumeSession, fileName, results]);
+    }, []); // Empty dependency array makes processQueue a stable function
 
+
+    // This effect starts the process when isChecking becomes true.
     useEffect(() => {
         if (isChecking) {
             processQueue();
         }
+        // processQueue is stable and doesn't need to be in the dependency array
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isChecking]);
 
 
     useEffect(() => {
-        // FIX: Replaced NodeJS.Timeout with ReturnType<typeof setTimeout> for browser compatibility.
         let interval: ReturnType<typeof setTimeout>;
         if (isChecking && usernames.length > 0) {
             interval = setInterval(() => {
@@ -305,7 +337,8 @@ export default function App() {
             return;
         }
 
-        let loadedUsernames = usernames;
+        let canStartProcessing = false;
+
         if (resumeSession) {
             const savedSession = localStorage.getItem('instagramCheckerSession');
             if (savedSession) {
@@ -317,22 +350,26 @@ export default function App() {
                     setFileName(data.fileName);
                     setMinDelay(data.minDelay);
                     setMaxDelay(data.maxDelay);
-                    loadedUsernames = data.usernames;
                     setStatusMessage(`Resuming session...`);
+                    canStartProcessing = data.usernames.length > 0;
                 } catch {
-                     // Corrupted data, start fresh
                     localStorage.removeItem('instagramCheckerSession');
                     setResults([]);
                     setCurrentIndex(0);
                 }
             }
-        } else {
-            setResults([]);
-            setCurrentIndex(0);
-            localStorage.removeItem('instagramCheckerSession');
+        } 
+        
+        if (!canStartProcessing) {
+             if (usernames.length > 0) {
+                setResults([]);
+                setCurrentIndex(0);
+                localStorage.removeItem('instagramCheckerSession');
+                canStartProcessing = true;
+             }
         }
 
-        if (loadedUsernames.length === 0) {
+        if (!canStartProcessing) {
             setStatusMessage('No usernames loaded. Please select a file.');
             return;
         }
@@ -341,13 +378,11 @@ export default function App() {
     };
 
 
-
     const handleStop = () => {
         setIsChecking(false);
         setStatusMessage('Process stopped by user.');
         setTimeRemaining('');
     };
-
 
 
     const handleExport = () => {
