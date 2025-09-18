@@ -23,6 +23,7 @@ interface SettingsPanelProps {
     maxDelay: number;
     resumeSession: boolean;
     isChecking: boolean;
+    usernames: string[];
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     setMinDelay: (v: number) => void;
     setMaxDelay: (v: number) => void;
@@ -30,7 +31,7 @@ interface SettingsPanelProps {
     fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ fileName, minDelay, maxDelay, resumeSession, isChecking, onFileChange, setMinDelay, setMaxDelay, setResumeSession, fileInputRef }) => (
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ fileName, minDelay, maxDelay, resumeSession, isChecking, usernames, onFileChange, setMinDelay, setMaxDelay, setResumeSession, fileInputRef }) => (
     <div className="bg-white p-6 rounded-2xl shadow-md mb-4 space-y-4">
         <div className="flex items-center space-x-4">
             <label htmlFor="file-upload" className={`flex-1 cursor-pointer transition-all duration-300 items-center justify-center p-3 text-center border-2 border-dashed rounded-xl ${isChecking ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-50 text-gray-600 hover:bg-indigo-50 hover:border-indigo-400'}`}>
@@ -39,6 +40,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ fileName, minDelay, maxDe
                 <input id="file-upload" ref={fileInputRef} type="file" className="hidden" accept=".txt,.csv" onChange={onFileChange} disabled={isChecking} />
             </label>
         </div>
+
+        {usernames.length > 0 && (
+            <div className="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-800">File Content Preview:</p>
+                <p className="text-xs text-gray-600 mt-1 italic truncate">
+                    {usernames.slice(0, 5).join(', ')}
+                    {usernames.length > 5 ? '...' : ''}
+                </p>
+            </div>
+        )}
+        
         <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-4">
             <div className="flex items-center space-x-2">
                 <label htmlFor="min-delay" className="font-medium text-gray-700">Min Delay (s):</label>
@@ -369,6 +381,7 @@ export default function App() {
                     maxDelay={maxDelay}
                     resumeSession={resumeSession}
                     isChecking={isChecking}
+                    usernames={usernames}
                     onFileChange={handleFileChange}
                     setMinDelay={setMinDelay}
                     setMaxDelay={setMaxDelay}
